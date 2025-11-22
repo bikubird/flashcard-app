@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#4F46E5">
+    <meta name="description" content="英単語学習用フラッシュカードアプリ">
+    <title>英単語フラッシュカード</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="data:application/json;base64,ewogICJuYW1lIjogIuiLseWNmeiqqeODleODqeODg+OCt+ODpeOCq+ODvOODiSIsCiAgInNob3J0X25hbWUiOiAi6Iux5Y2Z6Kqq5bizIiwKICAic3RhcnRfdXJsIjogIi8iLAogICJkaXNwbGF5IjogInN0YW5kYWxvbmUiLAogICJiYWNrZ3JvdW5kX2NvbG9yIjogIiNGRkZGRkYiLAogICJ0aGVtZV9jb2xvciI6ICIjNEY0NkU1IiwKICAiaWNvbnMiOiBbCiAgICB7CiAgICAgICJzcmMiOiAiZGF0YTppbWFnZS9zdmcreG1sLCUzQ3N2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCAxMDAgMTAwJyUzRSUzQ3RleHQgeT0nLjllbScgZm9udC1zaXplPSc5MCclM0UlRjAlOUYlOTMlOUElM0MvdGV4dCUzRSUzQy9zdmclM0UiLAogICAgICAic2l6ZXMiOiAiNTEyeDUxMiIsCiAgICAgICJ0eXBlIjogImltYWdlL3N2Zyt4bWwiCiAgICB9CiAgXQp9">
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // シンプルなストレージ実装（ローカルストレージを使用）
+        window.storage = {
+            get: async (key) => {
+                const value = localStorage.getItem(key);
+                return value ? { key, value } : null;
+            },
+            set: async (key, value) => {
+                localStorage.setItem(key, value);
+                return { key, value };
+            }
+        };
+
+        function FlashcardApp() {
+            const [words, setWords] = useState([]);
+            const [inputText, setInputText] = useState('');
+            const [isStudying, setIsStudying] = useState(false);
+            const [currentIndex, setCurrentIndex] = useState(0);
+            const [showAnswer, setShowAnswer] = useState(false);
+            const [repeatCount, setRepeatCount] = useState(0);
+            const [isTranslating, setIsTranslating] = useState(false);
+            const [isLoading, setIsLoading] = useState(true);
+
+            useEffect(() => {
+                loadWords();
+            }, []);
+
+            const loadWords = async () => {
+                try {
+                    const result = await window.storage.get('flashcard-words');
+                    if (result && result.value) {
+                        const savedWords = JSON.parse(result.value);
+                        setWords(savedWords);
+                    }
+                } catch (error) {
+                    console.log('初回起動または単語未登録');
+                } finally {
+                    setIsLoading(false);
+                }
+            };
+
+            const saveWords = async (newWords) => {
+                try {
+                    await window.storage.set('flashcard-words', JSON.stringify(newWords));
+                } catch (error) {
+                    console.error('保存エラー:', error);
+                }
+            };
+
+            const ipaToKatakana = (ipa) => {
+                let result = ipa
+                    .replace(/æ/g, 'ア').replace(/ɑː?/g, 'アー').replace(/ʌ/g, 'ア')
+                    .replace(/eɪ/g, 'エイ').replace(/aɪ/g, 'アイ').replace(/ɔɪ/g, 'オイ')
+                    .replace(/aʊ/g, 'アウ').replace(/oʊ/g, 'オウ').replace(/ɪə/g, 'イア')
+                    .replace(/eə/g, 'エア').replace(/ʊə/g, 'ウア').replace(/ɪ/g, 'イ')
+                    .replace(/iː/g, 'イー').replace(/ʊ/g, 'ウ').replace(/uː/g, 'ウー')
+                    .replace(/e/g, 'エ').replace(/ə/g, 'ア').replace(/ɜː/g, 'アー')
+                    .replace(/ɔː/g, 'オー').replace(/ɒ/g, 'オ').replace(/p/g, 'プ')
+                    .replace(/b/g, 'ブ').replace(/t/g, 'ト').replace(/d/g, 'ド')
+                    .replace(/k/g, 'ク').replace(/g/g, 'グ').replace(/tʃ/g, 'チ')
+                    .replace(/dʒ/g, 'ジ').replace(/f/g, 'フ').replace(/v/g, 'ヴ')
+                    .replace(/θ/g, 'ス').replace(/ð/g, 'ズ').replace(/s/g, 'ス')
+                    .replace(/z/g, 'ズ').replace(/ʃ/g, 'シュ').replace(/ʒ/g, 'ジュ')
+                    .replace(/h/g, 'ハ').replace(/m/g, 'ム').replace(/n/g, 'ン')
+                    .replace(/ŋ/g, 'ング').replace(/l/g, 'ル').replace(/r/g, 'ル')
+                    .replace(/j/g, 'ヤ').replace(/w/g, 'ワ').replace(/[ˈˌ.\/]/g, '');
+                return result;
+            };
+
+            const translateToEnglish = async (japanese) => {
+                setIsTranslating(true);
+                try {
+                    const response = await fetch('https://api.anthropic.com/v1/messages', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: 'claude-sonnet-4-20250514',
+                            max_tokens: 1000,
+                            messages: [{
+                                role: 'user',
+                                content: `次の日本語を英語に翻訳し、その発音記号(IPA)も提供してください。
+
+回答は必ず以下のJSON形式のみで返してください（説明や前置きは不要です）:
+{
+  "english": "英単語",
+  "ipa": "/発音記号/"
+}
+
+日本語: ${japanese}`
+                            }]
+                        })
+                    });
+
+                    const data = await response.json();
+                    const text = data.content[0].text.trim();
+                    const cleanText = text.replace(/```json|```/g, '').trim();
+                    const parsed = JSON.parse(cleanText);
+                    const katakana = ipaToKatakana(parsed.ipa);
+
+                    return { japanese, english: parsed.english, ipa: parsed.ipa, katakana };
+                } catch (error) {
+                    console.error('Translation error:', error);
+                    return { japanese, english: 'Error', ipa: '/error/', katakana: 'エラー' };
+                } finally {
+                    setIsTranslating(false);
+                }
+            };
+
+            const addWord = async () => {
+                if (inputText.trim()) {
+                    const newWord = await translateToEnglish(inputText.trim());
+                    const updatedWords = [...words, newWord];
+                    setWords(updatedWords);
+                    await saveWords(updatedWords);
+                    setInputText('');
+                }
+            };
+
+            const deleteWord = async (index) => {
+                const updatedWords = words.filter((_, i) => i !== index);
+                setWords(updatedWords);
+                await saveWords(updatedWords);
+            };
+
+            const clearAllWords = async () => {
+                if (window.confirm('すべての単語を削除しますか？')) {
+                    setWords([]);
+                    await saveWords([]);
+                }
+            };
+
+            const exportWords = () => {
+                const dataStr = JSON.stringify(words, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'flashcards.json';
+                link.click();
+                URL.revokeObjectURL(url);
+            };
+
+            const importWords = async (event) => {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = async (e) => {
+                        try {
+                            const imported = JSON.parse(e.target.result);
+                            const updatedWords = [...words, ...imported];
+                            setWords(updatedWords);
+                            await saveWords(updatedWords);
+                            alert(`${imported.length}個の単語をインポートしました`);
+                        } catch (error) {
+                            alert('ファイルの読み込みに失敗しました');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+
+            const startStudying = () => {
+                if (words.length > 0) {
+                    setIsStudying(true);
+                    setCurrentIndex(0);
+                    setShowAnswer(false);
+                    setRepeatCount(0);
+                }
+            };
+
+            const handleCardClick = () => {
+                if (!showAnswer) {
+                    setShowAnswer(true);
+                } else {
+                    if (repeatCount === 0) {
+                        setRepeatCount(1);
+                        setShowAnswer(false);
+                    } else {
+                        if (currentIndex < words.length - 1) {
+                            setCurrentIndex(currentIndex + 1);
+                            setShowAnswer(false);
+                            setRepeatCount(0);
+                        } else {
+                            setIsStudying(false);
+                            setCurrentIndex(0);
+                            setRepeatCount(0);
+                        }
+                    }
+                }
+            };
+
+            const speakWord = (text) => {
+                if ('speechSynthesis' in window) {
+                    speechSynthesis.cancel();
+                    setTimeout(() => {
+                        const utterance = new SpeechSynthesisUtterance(text);
+                        utterance.lang = 'en-US';
+                        utterance.rate = 0.8;
+                        utterance.volume = 1.0;
+                        speechSynthesis.speak(utterance);
+                    }, 100);
+                }
+            };
+
+            useEffect(() => {
+                if (isStudying && !showAnswer && words[currentIndex]) {
+                    const timer = setTimeout(() => {
+                        speakWord(words[currentIndex].english);
+                    }, 300);
+                    return () => clearTimeout(timer);
+                }
+            }, [isStudying, currentIndex, showAnswer]);
+
+            if (isLoading) {
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+                        <div className="text-xl text-indigo-600">読み込み中...</div>
+                    </div>
+                );
+            }
+
+            if (isStudying) {
+                const currentWord = words[currentIndex];
+                return (
+                    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+                        <div className="max-w-2xl w-full">
+                            <div className="text-center mb-4 text-gray-600">
+                                {currentIndex + 1} / {words.length} (表示: {repeatCount + 1}/2回目)
+                            </div>
+                            <div onClick={handleCardClick} className="bg-white rounded-2xl shadow-2xl p-12 cursor-pointer hover:shadow-3xl transition-all min-h-[400px] flex flex-col items-center justify-center">
+                                {!showAnswer ? (
+                                    <>
+                                        <div className="text-5xl font-bold text-indigo-600 mb-4">{currentWord.english}</div>
+                                        <div className="text-xl text-gray-600 mb-2 font-mono">{currentWord.ipa}</div>
+                                        <div className="text-2xl text-gray-500 mb-8">{currentWord.katakana}</div>
+                                        <button onClick={(e) => { e.stopPropagation(); speakWord(currentWord.english); }} className="p-4 bg-indigo-100 rounded-full hover:bg-indigo-200 transition-colors">
+                                            🔊
+                                        </button>
+                                        <div className="mt-8 text-gray-400">タップして答えを表示</div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="text-3xl text-gray-400 mb-2">{currentWord.english}</div>
+                                        <div className="text-lg text-gray-400 mb-4 font-mono">{currentWord.ipa}</div>
+                                        <div className="text-5xl font-bold text-green-600">{currentWord.japanese}</div>
+                                        <div className="mt-8 text-gray-400">タップして{repeatCount === 0 ? '2回目へ' : '次へ'}</div>
+                                    </>
+                                )}
+                            </div>
+                            <button onClick={() => { speechSynthesis.cancel(); setIsStudying(false); setCurrentIndex(0); setRepeatCount(0); }} className="mt-6 w-full py-3 bg-gray-200 rounded-lg hover:bg-gray-300 transition-colors">
+                                学習を終了
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            return (
+                <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 sm:p-6">
+                    <div className="max-w-4xl mx-auto">
+                        <h1 className="text-3xl sm:text-4xl font-bold text-indigo-900 mb-6 sm:mb-8 text-center">📚 英単語フラッシュカード</h1>
+                        
+                        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <input type="text" value={inputText} onChange={(e) => setInputText(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && addWord()} placeholder="日本語を入力（例: りんご）" className="flex-1 px-4 py-3 border-2 border-indigo-200 rounded-lg focus:border-indigo-500 focus:outline-none text-base" disabled={isTranslating} />
+                                <button onClick={addWord} disabled={isTranslating} className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400">
+                                    {isTranslating ? '翻訳中...' : '➕ 追加'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {words.length > 0 && (
+                            <>
+                                <button onClick={startStudying} className="w-full mb-4 sm:mb-6 py-4 bg-green-600 text-white rounded-xl text-lg sm:text-xl font-bold hover:bg-green-700 transition-colors">
+                                    📖 学習スタート ({words.length}単語)
+                                </button>
+
+                                <div className="flex flex-wrap gap-2 mb-4 sm:mb-6">
+                                    <button onClick={exportWords} className="flex-1 min-w-[140px] py-2 px-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
+                                        💾 エクスポート
+                                    </button>
+                                    <label className="flex-1 min-w-[140px] py-2 px-4 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex items-center justify-center cursor-pointer text-sm">
+                                        📤 インポート
+                                        <input type="file" accept=".json" onChange={importWords} className="hidden" />
+                                    </label>
+                                    <button onClick={clearAllWords} className="flex-1 min-w-[140px] py-2 px-4 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm">
+                                        🗑️ 全削除
+                                    </button>
+                                </div>
+
+                                <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+                                    <h2 className="text-lg sm:text-xl font-bold text-gray-800 mb-4">登録済み単語</h2>
+                                    <div className="space-y-3">
+                                        {words.map((word, index) => (
+                                            <div key={index} className="flex items-center justify-between p-3 sm:p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                                                <div className="flex-1 min-w-0 mr-3">
+                                                    <div className="font-bold text-indigo-600 text-base sm:text-lg truncate">{word.english}</div>
+                                                    <div className="text-xs sm:text-sm text-gray-600 font-mono">{word.ipa}</div>
+                                                    <div className="text-xs sm:text-sm text-gray-500">{word.katakana}</div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-sm sm:text-lg text-gray-700">{word.japanese}</div>
+                                                    <button onClick={() => deleteWord(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {words.length === 0 && (
+                            <div className="text-center text-gray-500 mt-12">
+                                <div className="text-6xl mb-4">📚</div>
+                                <p>まだ単語が登録されていません</p>
+                                <p className="text-sm mt-2">日本語を入力して単語を追加しましょう！</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<FlashcardApp />, document.getElementById('root'));
+    </script>
+</body>
+</html>
